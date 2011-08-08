@@ -51,7 +51,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 	}
 	
 	public void activate() {
-		tsFileDB = System.getProperty("timeseries.blockfile");
+		tsFileDB = System.getProperty("timeseries.entityfile");
 		if (tsFileDB == null)
 			tsFileDB = "D:\\Temp\\ts\\entities.db";		
 
