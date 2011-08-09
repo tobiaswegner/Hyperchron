@@ -148,38 +148,12 @@ public class TimeSeriesImplementation implements TimeSeries {
 
 	@Override
 	public long setIteratorAtRevision(long Iterator, long Revision) {
-		setIteratorAtEnd(Iterator);
-		
-		long currentRevision = 1;
-		
-		TimeSeriesIterator timeSeriesIterator = iterators.get(new Long(Iterator));
+		setIteratorAtBegin(Iterator);
 
-		Revision--;
+		if (Revision < 0)
+			return 0;
 		
-		while (Revision > 0)
-		{
-			if (Revision > timeSeriesIterator.currentIndex) {
-				Revision -= timeSeriesIterator.currentIndex;
-				currentRevision += timeSeriesIterator.currentIndex;
-				
-				timeSeriesIterator.currentIndex = 0;
-				
-				if (timeSeriesIterator.currentLeaf.previousSibling == null)
-					return currentRevision;
-				
-				timeSeriesIterator.currentLeaf = timeSeriesIterator.currentLeaf.previousSibling;
-				timeSeriesIterator.currentIndex = timeSeriesIterator.currentLeaf.length - 1; 
-			}
-			else
-			{
-				timeSeriesIterator.currentIndex -= (int)Revision;
-				currentRevision += Revision;
-				
-				Revision = 0;
-			}
-		}
-		
-		return currentRevision;
+		return MoveIterator(Iterator, Revision);
 	}
 
 	@Override
@@ -221,6 +195,16 @@ public class TimeSeriesImplementation implements TimeSeries {
 
 		timeSeriesIterator.next();
 	}
+	
+	@Override
+	public long MoveIterator(long Iterator, long deltaRevision) {
+		TimeSeriesIterator timeSeriesIterator = iterators.get(new Long(Iterator));
+
+		if (deltaRevision > 0)
+			return timeSeriesIterator.next(deltaRevision);
+		else
+			return timeSeriesIterator.previous(-deltaRevision);		
+	}		
 
 	@Override
 	public long getID(long Iterator) {

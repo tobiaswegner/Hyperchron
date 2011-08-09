@@ -33,6 +33,8 @@ public interface TimeSeries {
 	public void IteratorGoToNextRevision(long Iterator);
 	public void IteratorGoToPreviousRevision(long Iterator);
 	
+	public long MoveIterator(long Iterator, long deltaRevision);
+	
 	public long getID(long Iterator);
 	public long getCurrentTime(long Iterator);
 	

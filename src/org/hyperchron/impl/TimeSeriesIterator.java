@@ -43,6 +43,40 @@ public class TimeSeriesIterator {
 		}
 	}
 	
+	public long next (long steps) {
+		long currentRevision = 0;
+		
+		while (steps > 0)
+		{
+			int revisionsLeft = revisionsLeftInCurrentLeaf();
+			
+			if (steps > revisionsLeft) {
+				steps -= revisionsLeft;
+				currentRevision += revisionsLeft;
+				
+				currentIndex += revisionsLeft;
+				
+				if (currentLeaf.nextSibling == null)
+					return currentRevision;
+				
+				currentLeaf = currentLeaf.nextSibling;
+				currentIndex = 0;
+				
+				currentRevision++;
+				steps--;
+			}
+			else
+			{
+				currentIndex += (int)steps;
+				currentRevision += steps;
+				
+				steps = 0;
+			}
+		}
+		
+		return currentRevision;
+	}
+	
 	public void previous () {
 		if (currentIndex > 0) {
 			currentIndex--;
@@ -54,6 +88,40 @@ public class TimeSeriesIterator {
 		}
 	}
 	
+	public long previous (long steps) {
+		long currentRevision = 0;
+		
+		while (steps > 0)
+		{
+			int revisionsLeft = currentIndex;
+			
+			if (steps > revisionsLeft) {
+				steps -= revisionsLeft;
+				currentRevision += revisionsLeft;
+				
+				currentIndex = 0;
+				
+				if (currentLeaf.previousSibling == null)
+					return currentRevision;
+				
+				currentLeaf = currentLeaf.previousSibling;
+				currentIndex = currentLeaf.length - 1;
+				
+				currentRevision++;
+				steps--;
+			}
+			else
+			{
+				currentIndex -= (int)steps;
+				currentRevision += steps;
+				
+				steps = 0;
+			}
+		}
+		
+		return currentRevision;
+	}
+	
 	public long getID() {
 		if (currentIndex < currentLeaf.length) {
 			if (currentLeaf.IDs == null)
@@ -63,5 +131,9 @@ public class TimeSeriesIterator {
 		}
 			
 		return -1;
+	}
+	
+	public int revisionsLeftInCurrentLeaf () {
+		return currentLeaf.length - currentIndex - 1;
 	}
 }
