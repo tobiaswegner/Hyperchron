@@ -58,6 +58,7 @@ public class BlockStore implements Runnable {
 		
 		cacheFlushThread = new Thread(this);
 		cacheFlushThread.setName("Blockstore cache flush thread");
+		cacheFlushThread.start();
 	}
 	
 	public TreeLeaf LRULeaf = null;
