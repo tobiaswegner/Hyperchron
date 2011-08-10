@@ -90,10 +90,10 @@ public class HyperchronTest {
 		 * 4 random data retrieval
 		 */
 		
-		int bench = 3;
+		int bench = 2;
 
 		int offset = 0;
-		int length = 64 * 1024;
+		int length = 64 * 1024 * 1024;
 		
 		switch (bench) {
 		case 0:
@@ -145,7 +145,7 @@ public class HyperchronTest {
 		case 3:
 			Random rnd = new Random();
 			
-			for (int i = 0; i < 64 * 1024; i++) {
+			for (int i = 0; i < 1024; i++) {
 				checkValue("debug", offset + rnd.nextInt(length));
 			}
 			
