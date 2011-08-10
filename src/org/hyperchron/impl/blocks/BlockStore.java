@@ -355,7 +355,7 @@ public class BlockStore implements Runnable {
 		if (longBuffer != null)
 			longBuffer.get(SuperblockCache);
 		else {
-			for (int i = 0; i < BLOCK_SIZE * 2; i++)
+			for (int i = 0; i < BLOCK_SIZE; i++)
 				SuperblockCache[i] = -1;
 			
 			LoadedFromDisk = false;
@@ -411,7 +411,7 @@ public class BlockStore implements Runnable {
 		}		
 	}
 
-	long SuperblockCache[] = new long[BLOCK_SIZE * 2];
+	long SuperblockCache[] = new long[BLOCK_SIZE];
 	long SuperblockCacheID = -1;
 
 	@Override
