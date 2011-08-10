@@ -200,13 +200,13 @@ public class Tree {
 		TreeElement currentElement = node.children.get(0);
 		
 		//find insert position
-		for (int i = 1; i < node.children.size(); i++) {
+		for (int i = 0; i < node.children.size(); i++) {
 			currentElement = node.children.get(i);
 			
 			if (leaf.startingTimestamp < currentElement.startingTimestamp) {
 				//insert at i
 				if (currentElement instanceof TreeNode) {
-					AddLeaveToNode(leaf, (TreeNode)currentElement);
+					AddLeaveToNode(leaf, ((TreeNode)currentElement).previousSibling);
 				} else {
 					TreeLeaf currentLeaf = (TreeLeaf)currentElement;
 					
