@@ -521,7 +521,7 @@ public class Tree {
 			TreeNode node = (TreeNode)rootElement;
 			rootElement = getFirstChild(node);
 			
-			while (timestamp > GetEndingTimeStamp(rootElement)) {
+			while (timestamp >= GetEndingTimeStamp(rootElement)) {
 				if (rootElement instanceof TreeNode)
 					rootElement = getNextSibling((TreeNode)rootElement);
 
