@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.hyperchron.TimeSeries;
 import org.hyperchron.impl.blocks.BlockStore;
 
-public class TimeSeriesImplementation implements TimeSeries {
+public class TimeSeriesImplementation implements TimeSeries, Runnable {
 
 	Hashtable<Long, TimeSeriesIterator> iterators = new Hashtable<Long, TimeSeriesIterator>();
 	
@@ -46,6 +46,10 @@ public class TimeSeriesImplementation implements TimeSeries {
 	public String tsFileDB = null;
 	
 	volatile boolean ShuttingDown = false;
+	
+	Thread dumpEntitiesThread;
+	boolean dumpEntitiesThreadActive = true;
+	Object dumpEntitiesThreadNotifier = new Object();
 
 	public TimeSeriesImplementation() {		
 	}
@@ -83,7 +87,11 @@ public class TimeSeriesImplementation implements TimeSeries {
 				System.out.println ("Timeseries could not find entities, so create new db");
 			} else
 				e.printStackTrace();
-		}		
+		}
+		
+		dumpEntitiesThread = new Thread (this);
+		dumpEntitiesThread.setName("Dump entities thread");
+		dumpEntitiesThread.start();
 	}
 	
 	public void deactivate() {
@@ -240,6 +248,18 @@ public class TimeSeriesImplementation implements TimeSeries {
 		if (ShuttingDown)
 			return;
 		
+		dumpEntitiesThreadActive = false;
+		try {
+			synchronized (dumpEntitiesThreadNotifier) {
+				dumpEntitiesThreadNotifier.notify();
+			}
+			
+			dumpEntitiesThread.join();
+		} catch (InterruptedException e1) {
+			// TODO Auto-generated catch block
+			e1.printStackTrace();
+		}
+		
 		ShuttingDown = true;
 		
 		BlockStore.instance.Shutdown();
@@ -261,6 +281,39 @@ public class TimeSeriesImplementation implements TimeSeries {
 			bw.close();
 		} catch (Exception e) {
 			e.printStackTrace();
+		}
+	}
+
+	@Override
+	public void run() {
+		while (dumpEntitiesThreadActive) {
+			synchronized (dumpEntitiesThreadNotifier) {
+				File dbFile = new File(tsFileDB + ".dmp");
+				
+				try
+				{
+					BufferedWriter bw = new BufferedWriter(new FileWriter(dbFile));
+					
+					for (EntityDescriptor entityDescriptor : entityDescriptions.values()) {
+						bw.write(entityDescriptor.uuid + "\r\n" + entityDescriptor.entityID + "\r\n");
+					}
+					
+					bw.write("ENTITY_ID\r\n" + entityID.get() + "\r\n");
+					
+					bw.flush();
+					
+					bw.close();
+				} catch (Exception e) {
+					e.printStackTrace();
+				}				
+				
+				try {
+					dumpEntitiesThreadNotifier.wait(5000);
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
 		}
 	}
 }
