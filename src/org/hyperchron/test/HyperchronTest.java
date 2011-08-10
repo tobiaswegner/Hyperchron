@@ -20,6 +20,7 @@
 package org.hyperchron.test;
 
 import java.util.ArrayList;
+import java.util.Random;
 
 import org.hyperchron.impl.TimeSeriesImplementation;
 
@@ -60,6 +61,17 @@ public class HyperchronTest {
 			}
 	}
 	
+	public static void checkValue (String uuid, int position) {
+		long iterator = ts.getIterator(uuid);
+		
+		ts.setIteratorAfterTimestamp(iterator, position);
+		
+		if (ts.getTimestamp(iterator) != position) {
+			System.out.println("Fatal error, db inconsistent");
+		}
+
+		ts.releaseIterator(iterator);
+	}
 	/**
 	 * @param args
 	 */
@@ -73,16 +85,18 @@ public class HyperchronTest {
 		
 		/*
 		 * 0 linear insert
-		 * 1 data retrieval
+		 * 1 reverse linear insert
+		 * 3 data retrieval
+		 * 4 random data retrieval
 		 */
 		
-		int bench = 1;
+		int bench = 3;
+
+		int offset = 0;
+		int length = 64 * 1024;
 		
 		switch (bench) {
 		case 0:
-			int offset = 0;
-			int length = 64 * 1024 * 1024;
-			
 			for (int i = offset; i < offset + length; i++) {
 				ts.saveTimestamp("debug", i);
 			}
@@ -98,6 +112,21 @@ public class HyperchronTest {
 			
 			break;
 		case 1:
+			for (int i = offset + length - 1; i >= offset; i--) {
+				ts.saveTimestamp("debug", i);
+			}
+			
+			endTime = System.nanoTime();
+			
+			//give flush thread time to work
+			try {
+				Thread.sleep(5000);
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+			
+			break;
+		case 2:
 			checkValues (readTS("debug", 512 * 1024, 512 * 1024 + 1024), 512 * 1024, 1024);
 			checkValues (readTS("debug", 2 * 1024 * 1024, 2 * 1024 * 1024 + 1024), 2 * 1024 * 1024, 1024);
 			checkValues (readTS("debug", 16 * 1024 * 1024, 16 * 1024 * 1024 + 1024), 16 * 1024 * 1024, 1024);
@@ -112,6 +141,16 @@ public class HyperchronTest {
 			
 			endTime = System.nanoTime();
 
+			break;
+		case 3:
+			Random rnd = new Random();
+			
+			for (int i = 0; i < 64 * 1024; i++) {
+				checkValue("debug", offset + rnd.nextInt(length));
+			}
+			
+			endTime = System.nanoTime();
+			
 			break;
 		default:
 		}
