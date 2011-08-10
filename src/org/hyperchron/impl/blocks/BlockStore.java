@@ -46,6 +46,9 @@ public class BlockStore implements Runnable {
 	
 	protected Thread cacheFlushThread;
 	protected boolean cacheFlushThreadActive = true;
+	protected Object cacheFlushThreadNotifier = new Object();
+	
+	protected Object GarbageCollectionInProgress = new Object();
 	
 	public String blockDB = null;
 	
@@ -67,7 +70,7 @@ public class BlockStore implements Runnable {
 	public int LeafCount = 0;
 	public Object LRUListMutex = new Object();
 	
-	public final int MAX_LEAF_COUNT = 2;
+	public final int MAX_LEAF_COUNT = 512;
 	
 	java.util.concurrent.atomic.AtomicLong blockID = new AtomicLong();	
 	
@@ -247,6 +250,8 @@ public class BlockStore implements Runnable {
 				AccessLeaf(leaf);
 			}								
 		}
+		
+		RunGarbageCollector();		
 	}
 	
 	public TreeLeaf RemoveLeafFromLRUList () {
@@ -266,36 +271,43 @@ public class BlockStore implements Runnable {
 	}
 	
 	public void RunGarbageCollector() {
-		while (LeafCount > MAX_LEAF_COUNT) {
-			TreeLeaf swapOutLeaf = RemoveLeafFromLRUList();
-				
-			synchronized (swapOutLeaf) {
-				SaveDataToDisk(swapOutLeaf.entityDescriptor.uuid, swapOutLeaf);
-				
-				swapOutLeaf.timeStamps = null;
-				swapOutLeaf.LRUprev = null;
-				swapOutLeaf.LRUnext = null;	
+		synchronized (GarbageCollectionInProgress) {
+			while (LeafCount > MAX_LEAF_COUNT) {
+				TreeLeaf swapOutLeaf = RemoveLeafFromLRUList();
+					
+				synchronized (swapOutLeaf) {
+					SaveDataToDisk(swapOutLeaf.entityDescriptor.uuid, swapOutLeaf);
+					
+					swapOutLeaf.timeStamps = null;
+					swapOutLeaf.LRUprev = null;
+					swapOutLeaf.LRUnext = null;	
+				}
 			}
-		}		
+		}
 	}
 	
 	public void FlushCache() {
-		if (LeafCount == 0)
-			return;	//nothing to do
-		
-		TreeLeaf leaf = OldLeaf;
-		
-		while (leaf != null) {
-			if (leaf.lastWrite != -1) {
-				SaveDataToDisk(leaf.entityDescriptor.uuid, leaf);
-			}
+		synchronized (GarbageCollectionInProgress) {
+			if (LeafCount == 0)
+				return;	//nothing to do
 			
-			leaf = leaf.LRUprev;
+			TreeLeaf leaf = OldLeaf;
+			
+			while (leaf != null) {
+				if (leaf.lastWrite != -1) {
+					SaveDataToDisk(leaf.entityDescriptor.uuid, leaf);
+				}
+				
+				leaf = leaf.LRUprev;
+			}			
 		}
 	}
 	
 	public void Shutdown () {
 		cacheFlushThreadActive = false;
+		synchronized (cacheFlushThreadNotifier) {
+			cacheFlushThreadNotifier.notify();
+		}
 		
 		synchronized (LRUListMutex) {
 			while (LRULeaf != null) {
@@ -419,10 +431,10 @@ public class BlockStore implements Runnable {
 		while (cacheFlushThreadActive) {
 			FlushCache();
 			
-			RunGarbageCollector();
-		
 			try {
-				Thread.sleep(BLOCK_FLUSH_INTERVAL);
+				synchronized (cacheFlushThreadNotifier) {
+					cacheFlushThreadNotifier.wait(BLOCK_FLUSH_INTERVAL);					
+				}
 			} catch (InterruptedException e) {
 				if (cacheFlushThreadActive)
 					e.printStackTrace();
