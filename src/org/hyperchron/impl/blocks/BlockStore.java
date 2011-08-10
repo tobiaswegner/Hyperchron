@@ -425,8 +425,8 @@ public class BlockStore implements Runnable {
 			try {
 				Thread.sleep(BLOCK_FLUSH_INTERVAL);
 			} catch (InterruptedException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
+				if (cacheFlushThreadActive)
+					e.printStackTrace();
 			}
 		}
 	}
