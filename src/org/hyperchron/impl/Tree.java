@@ -212,12 +212,12 @@ public class Tree {
 					
 					node.children.add(i, leaf);
 
-					leaf.nextSibling = currentLeaf.nextSibling;
-					currentLeaf.nextSibling = leaf;
-					leaf.previousSibling = currentLeaf;
+					leaf.nextSibling = currentLeaf;
+					leaf.previousSibling = currentLeaf.previousSibling;
+					currentLeaf.previousSibling = leaf;
 					
-					if (leaf.nextSibling != null)
-						leaf.nextSibling.nextSibling = leaf;
+					if (leaf.previousSibling != null)
+						leaf.previousSibling.nextSibling = leaf;
 					
 					if (node.children.size() > MAX_CHILDREN)
 						Split(node);
