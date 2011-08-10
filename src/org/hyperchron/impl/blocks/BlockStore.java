@@ -296,7 +296,6 @@ public class BlockStore implements Runnable {
 	
 	public void Shutdown () {
 		cacheFlushThreadActive = false;
-		cacheFlushThread.interrupt();
 		
 		synchronized (LRUListMutex) {
 			while (LRULeaf != null) {
