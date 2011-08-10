@@ -328,10 +328,10 @@ public class Tree {
 	
 	public int GetIndexForTimestamp(TreeLeaf leaf, long timestamp) {
 		if (leaf.length > 0) {
-			if (leaf.timeStamps == null)
-				BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
-				
 			synchronized (leaf) {
+				if (leaf.timeStamps == null)
+					BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
+				
 				int index = Arrays.binarySearch(leaf.timeStamps, 0, leaf.length - 1, timestamp);
 
 				if (index < 0)
