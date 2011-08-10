@@ -20,6 +20,7 @@
 package org.hyperchron.impl;
 
 import java.util.Arrays;
+import java.util.Date;
 
 import org.hyperchron.impl.blocks.BlockStore;
 
@@ -73,34 +74,7 @@ public class Tree {
 		}
 		
 		if (rootNode.children.size() > 0) 
-		{
-/*			java.util.Collections.sort(rootNode.children, new Comparator<TreeElement>() {
-
-				@Override
-				public int compare(TreeElement o1, TreeElement o2) {
-					if (o1.startingTimestamp < o2.startingTimestamp)
-						return -1;
-
-					if (o1.startingTimestamp == o2.startingTimestamp)
-						return 0;
-						
-					return 1;
-				}
-			});
-			
-			TreeLeaf lastLeaf = (TreeLeaf) rootNode.children.get(0);
-			
-			for (int i = 1; i < rootNode.children.size(); i++) {
-				TreeLeaf currentLeaf = (TreeLeaf) rootNode.children.get(i);
-				
-				lastLeaf.nextSibling = currentLeaf;
-				currentLeaf.previousSibling = lastLeaf;
-				
-				lastLeaf.endingTimestamp = currentLeaf.startingTimestamp;
-				
-				lastLeaf = currentLeaf;
-			}*/
-			
+		{			
 			//go to first leaf
 			TreeLeaf lastLeaf = getFirstLeaf();
 			
@@ -116,54 +90,6 @@ public class Tree {
 					lastLeaf = currentLeaf;
 			}
 		}
-/*
-		if (BlockStore.instance.ReadHeader(entityDescriptor)) {	
-			//try to restore meta data from disk
-			while (BlockStore.instance.LoadDataIntoLeaf(entityDescriptor.uuid, leaf, false)) {
-				leaf.parent = rootNode;
-				leaf.entityDescriptor = entityDescriptor;
-			
-				if (rootNode.children.size() == 0)
-				{
-					//first child so start with 0
-					leaf.startingTimestamp = 0;
-				}
-				else
-					leaf.startingTimestamp = leaf.timeStamps[0];
-				
-				rootNode.children.add(leaf);
-				
-				leaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), entityDescriptor.entityID);	
-			}
-			
-			java.util.Collections.sort(rootNode.children, new Comparator<TreeElement>() {
-
-				@Override
-				public int compare(TreeElement o1, TreeElement o2) {
-					if (o1.startingTimestamp < o2.startingTimestamp)
-						return -1;
-
-					if (o1.startingTimestamp == o2.startingTimestamp)
-						return 0;
-						
-					return 1;
-				}
-			});
-			
-			TreeLeaf lastLeaf = (TreeLeaf) rootNode.children.get(0);
-			
-			for (int i = 1; i < rootNode.children.size(); i++) {
-				TreeLeaf currentLeaf = (TreeLeaf) rootNode.children.get(i);
-				
-				lastLeaf.nextSibling = currentLeaf;
-				currentLeaf.previousSibling = lastLeaf;
-				
-				lastLeaf.endingTimestamp = currentLeaf.startingTimestamp;
-				
-				lastLeaf = currentLeaf;
-			}
-		}*/
-		
 		else {
 			leaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), entityDescriptor.entityID);
 
@@ -222,20 +148,20 @@ public class Tree {
 		return node.children.get(node.children.size() - 1);
 	}
 
-	public long SaveIDForTimestamp(TreeNode node, long ID, long timestamp) {
+	public boolean SaveTimestamp(TreeNode node, long timestamp) {
 		TreeElement child = getChildByTimeStamp(node, timestamp);
 		
 		if (child instanceof TreeNode) {
-			return SaveIDForTimestamp((TreeNode)child, ID, timestamp);
+			return SaveTimestamp((TreeNode)child, timestamp);
 		}
 		
 		if (child instanceof TreeLeaf) {
 			TreeLeaf leaf = (TreeLeaf) child;
 			
-			return SaveIDForTimestamp(leaf, ID, timestamp);
+			return SaveTimestamp(leaf, timestamp);
 		}
 		
-		return ID;
+		return false;
 	}		
 	
 	public void AddNodeToNode (TreeNode newNode, TreeNode node) {
@@ -404,54 +330,63 @@ public class Tree {
 		if (leaf.length > 0) {
 			if (leaf.timeStamps == null)
 				BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
-			
-			int index = Arrays.binarySearch(leaf.timeStamps, 0, leaf.length - 1, timestamp);
-			
-			if (index < 0)
-				index = -(index + 1);
-			
-			return index;
+				
+			synchronized (leaf) {
+				int index = Arrays.binarySearch(leaf.timeStamps, 0, leaf.length - 1, timestamp);
+
+				if (index < 0)
+					index = -(index + 1);
+				
+				return index;
+			}		
 		}
 		
 		return 0;
 	}	
 	
-	public long SaveIDForTimestamp(TreeLeaf leaf, long ID, long timestamp) {
+	public boolean SaveTimestamp(TreeLeaf leaf, long timestamp) {
 		if (leaf.timeStamps == null)
 			BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+			
+		int index = -1; 
 		
-		int index = GetIndexForTimestamp(leaf, timestamp);
-		
-		if ((leaf.timeStamps[index] == timestamp) && (index < leaf.length))
-			return leaf.IDs[index];
-		
+		synchronized (leaf) {
+			index = GetIndexForTimestamp(leaf, timestamp);
+			
+			if ((leaf.timeStamps[index] == timestamp) && (index < leaf.length))
+			{
+				//already in index
+				return true;
+			}
+		}			
+
 		if (leaf.length == BlockStore.BLOCK_SIZE) {
 			Split(leaf, timestamp > leaf.timeStamps[BlockStore.BLOCK_SIZE - 1]);
 			
-			return -1;
+			return false;
+		}
+			
+		synchronized (leaf) {
+			if (leaf.length == 0) {
+				leaf.timeStamps[0] = timestamp;
+				
+				leaf.length = 1;
+			} else if (timestamp > leaf.timeStamps[leaf.length - 1]) {
+				leaf.timeStamps[leaf.length] = timestamp;
+				
+				leaf.length++;
+			} else {
+				System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.length - index);
+				
+				leaf.timeStamps[index] = timestamp;
+				
+				leaf.length++;
+			}
+			
+			leaf.lastWrite = new Date().getTime();
 		}
 		
-		if (leaf.length == 0) {
-			leaf.timeStamps[0] = timestamp;
-			leaf.IDs[0] = ID;
-			
-			leaf.length = 1;
-		} else if (timestamp > leaf.timeStamps[leaf.length - 1]) {
-			leaf.timeStamps[leaf.length] = timestamp;
-			leaf.IDs[leaf.length] = ID;
-			
-			leaf.length++;
-		} else {
-			System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.length - index);
-			System.arraycopy(leaf.IDs, index, leaf.IDs, index + 1, leaf.length - index);
-			
-			leaf.timeStamps[index] = timestamp;
-			leaf.IDs[index] = ID; 
-			
-			leaf.length++;
-		}
-		
-		return ID;
+		return true;
 	}
 	
 	public void Split(TreeLeaf leaf, boolean append) {
@@ -480,25 +415,28 @@ public class Tree {
 				
 				TreeLeaf newLeaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), leaf.entityDescriptor.entityID);
 				
-				newLeaf.entityDescriptor = leaf.entityDescriptor;
-				newLeaf.parent = leaf.parent;
-				
-				newLeaf.nextSibling = leaf.nextSibling;
-				newLeaf.previousSibling = leaf;
-				leaf.nextSibling = newLeaf;
-				
-				newLeaf.endingTimestamp = leaf.endingTimestamp;
-				newLeaf.startingTimestamp = splitTime;
-				leaf.endingTimestamp = splitTime;
-				
-				newLeaf.length = leaf.length - splitPosition;
-				leaf.length = splitPosition;
+				synchronized (newLeaf) {
+					newLeaf.entityDescriptor = leaf.entityDescriptor;
+					newLeaf.parent = leaf.parent;
+					
+					newLeaf.nextSibling = leaf.nextSibling;
+					newLeaf.previousSibling = leaf;
+					leaf.nextSibling = newLeaf;
+					
+					newLeaf.endingTimestamp = leaf.endingTimestamp;
+					newLeaf.startingTimestamp = splitTime;
+					leaf.endingTimestamp = splitTime;
+					
+					newLeaf.length = leaf.length - splitPosition;
+					leaf.length = splitPosition;
 
-				newLeaf.timeStamps = new long [BlockStore.BLOCK_SIZE];
-				newLeaf.IDs = new long [BlockStore.BLOCK_SIZE];
-				
-				System.arraycopy(leaf.timeStamps, splitPosition, newLeaf.timeStamps, 0, newLeaf.length);
-				System.arraycopy(leaf.IDs, splitPosition, newLeaf.IDs, 0, newLeaf.length);
+					newLeaf.timeStamps = new long [BlockStore.BLOCK_SIZE];
+					
+					System.arraycopy(leaf.timeStamps, splitPosition, newLeaf.timeStamps, 0, newLeaf.length);
+					
+					leaf.lastWrite = new Date().getTime();
+					newLeaf.lastWrite = leaf.lastWrite;					
+				}
 
 				//insert at right position
 				for (int i = 0; i < newLeaf.parent.children.size(); i++){
@@ -512,8 +450,6 @@ public class Tree {
 				}
 				
 				BlockStore.instance.InsertLeafIntoLRUList(newLeaf);
-				
-				BlockStore.instance.RunGarbageCollector();
 			}
 		}
 		
@@ -532,23 +468,14 @@ public class Tree {
 	}
 */	
 	
-	public long GetIDForIndex(TreeLeaf leaf, int index) {
-		if (index < leaf.length) {
-			if (leaf.IDs == null)
-				BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
-				
-			return leaf.IDs[index];
-		}
-			
-		return -1;
-	}
-	
 	public long getTimeStampForIndex(TreeLeaf leaf, int index) {
 		if (index < leaf.length) {
-			if (leaf.timeStamps == null)
-				BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
-				
-			return leaf.timeStamps[index];
+			synchronized (leaf) {
+				if (leaf.timeStamps == null)
+					BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+					
+				return leaf.timeStamps[index];				
+			}
 		}
 
 		return -1;
@@ -561,12 +488,8 @@ public class Tree {
 	/*
 	 * API
 	 */
-	public long SaveIDForTimestamp(long ID, long timestamp) {
-		long savedID;
-		
-		while ((savedID = SaveIDForTimestamp(rootNode, ID, timestamp)) < 0);
-		
-		return savedID;
+	public void SaveTimestamp(long timestamp) {
+		while (!SaveTimestamp(rootNode, timestamp));
 	}	
 	
 	public TreeLeaf getFirstLeaf() {

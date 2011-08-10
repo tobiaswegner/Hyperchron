@@ -35,10 +35,9 @@ public interface TimeSeries {
 	
 	public long MoveIterator(long Iterator, long deltaRevision);
 	
-	public long getID(long Iterator);
-	public long getCurrentTime(long Iterator);
+	public long getTimestamp(long Iterator);
 	
-	public long saveTimestamp (String key, long Timestamp);
+	public boolean saveTimestamp (String key, long Timestamp);
 	
 	public void Shutdown ();
 }

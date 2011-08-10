@@ -122,13 +122,16 @@ public class TimeSeriesIterator {
 		return currentRevision;
 	}
 	
-	public long getID() {
-		if (currentIndex < currentLeaf.length) {
-			if (currentLeaf.IDs == null)
-				BlockStore.instance.LoadDataIntoLeaf(currentLeaf.entityDescriptor.uuid, currentLeaf, true);
-				
-			return currentLeaf.IDs[currentIndex];
+	public long getTimeStamp() {
+		if (currentLeaf.timeStamps == null)
+			BlockStore.instance.LoadDataIntoLeaf(currentLeaf.entityDescriptor.uuid, currentLeaf, true);
+
+		synchronized (currentLeaf) {
+			if (currentIndex < currentLeaf.length) {				
+				return currentLeaf.timeStamps[currentIndex];
+			}			
 		}
+		
 			
 		return -1;
 	}

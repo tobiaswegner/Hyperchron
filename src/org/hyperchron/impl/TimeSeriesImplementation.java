@@ -68,12 +68,8 @@ public class TimeSeriesImplementation implements TimeSeries {
 				if (line.equals("ENTITY_ID")) {				
 					entityID.set(ID);
 				} else {
-					long elementID = Long.parseLong(br.readLine());
-					
 					EntityDescriptor entityDescriptor = new EntityDescriptor(line, ID);
 					
-					entityDescriptor.setNextElementID(elementID);
-
 					Tree tree = new Tree(entityDescriptor);
 					entityDescriptor.tree = tree;
 
@@ -207,25 +203,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 	}		
 
 	@Override
-	public long getID(long Iterator) {
-		TimeSeriesIterator timeSeriesIterator = iterators.get(new Long(Iterator));
-
-		if ((timeSeriesIterator.currentIndex < 0) || (timeSeriesIterator.currentLeaf == null))
-			return -1;
-		
-		long ID = timeSeriesIterator.tree.GetIDForIndex(timeSeriesIterator.currentLeaf, timeSeriesIterator.currentIndex);
-		
-		return ID;
-		/*
-		 * For debug purpose return just ID
-		 */
-//		return new TimedValue(Long.toString(ID), timeSeriesIterator.tree.getTimeStampForIndex(timeSeriesIterator.currentLeaf, timeSeriesIterator.currentIndex));	
-		
-//		return new TimedValue(backend.Retrieve(timeSeriesIterator.tree.uuid + Long.toString(ID)), timeSeriesIterator.tree.getTimeStampForIndex(timeSeriesIterator.currentLeaf, timeSeriesIterator.currentIndex));	
-	}
-
-	@Override
-	public long getCurrentTime(long Iterator) {
+	public long getTimestamp(long Iterator) {
 		TimeSeriesIterator timeSeriesIterator = iterators.get(new Long(Iterator));
 
 		if ((timeSeriesIterator.currentIndex < 0) || (timeSeriesIterator.currentLeaf == null))
@@ -237,9 +215,9 @@ public class TimeSeriesImplementation implements TimeSeries {
 	}
 	
 	@Override
-	public long saveTimestamp(String key, long Timestamp) {
+	public boolean saveTimestamp(String key, long Timestamp) {
 		if (ShuttingDown)
-			return -1;
+			return false;
 		
 		EntityDescriptor entityDescriptor = entityDescriptions.get(key);
 		
@@ -252,11 +230,9 @@ public class TimeSeriesImplementation implements TimeSeries {
 			entityDescriptions.put(key, entityDescriptor);
 		}
 
-		long ID = entityDescriptor.getNextElementID();
+		entityDescriptor.tree.SaveTimestamp(Timestamp);
 		
-		ID = entityDescriptor.tree.SaveIDForTimestamp(ID, Timestamp);
-		
-		return ID;
+		return true;
 	}
 
 	@Override
@@ -275,7 +251,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 			BufferedWriter bw = new BufferedWriter(new FileWriter(dbFile));
 			
 			for (EntityDescriptor entityDescriptor : entityDescriptions.values()) {
-				bw.write(entityDescriptor.uuid + "\r\n" + entityDescriptor.entityID + "\r\n" + entityDescriptor.getNextElementID() + "\r\n");
+				bw.write(entityDescriptor.uuid + "\r\n" + entityDescriptor.entityID + "\r\n");
 			}
 			
 			bw.write("ENTITY_ID\r\n" + entityID.get() + "\r\n");

@@ -25,21 +25,27 @@ import java.io.FileOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.nio.channels.FileChannel;
+import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.hyperchron.impl.TreeLeaf;
 
-public class BlockStore {
+public class BlockStore implements Runnable {
 	public static int BLOCK_SIZE = 4096;	
 	
-	public static int BLOCK_SIZE_BYTES = 2 * BLOCK_SIZE * 8;
+	public static int BLOCK_SIZE_BYTES = BLOCK_SIZE * 8;
 	
 	public static int SUPERBLOCK_ENTRIES = 4;
 	//entity id, start time, length 
 	
 	public int blocksPerSuperblock = BLOCK_SIZE_BYTES / (SUPERBLOCK_ENTRIES * 8);
 	
+	public static int BLOCK_FLUSH_INTERVAL = 1000;
+	
 	public static BlockStore instance = new BlockStore();
+	
+	protected Thread cacheFlushThread;
+	protected boolean cacheFlushThreadActive = true;
 	
 	public String blockDB = null;
 	
@@ -49,6 +55,9 @@ public class BlockStore {
 			blockDB = "D:\\Temp\\ts\\block.db";
 		
 		ReadHeader();
+		
+		cacheFlushThread = new Thread(this);
+		cacheFlushThread.setName("Blockstore cache flush thread");
 	}
 	
 	public TreeLeaf LRULeaf = null;
@@ -74,11 +83,18 @@ public class BlockStore {
 		LongBuffer longBuffer = ReadBlock(blockID);
 
 		if ((longBuffer != null) && (longBuffer.capacity() == BLOCK_SIZE_BYTES / 8)) {
-			leaf.length = (int)ReadFromSuperblock(chunks, chunkOffset, 2);
-			leaf.timeStamps = new long[BLOCK_SIZE];
-			longBuffer.get(leaf.timeStamps);
-			leaf.IDs = new long[BLOCK_SIZE];
-			longBuffer.get(leaf.IDs);
+			synchronized (leaf) {
+				if (leaf.timeStamps != null)
+					return false;
+				
+				leaf.length = (int)ReadFromSuperblock(chunks, chunkOffset, 2);
+				leaf.timeStamps = new long[BLOCK_SIZE];
+				longBuffer.get(leaf.timeStamps);	
+				
+				//this block is still clean
+				leaf.lastWrite = -1;
+				leaf.lastFlush = new Date().getTime();
+			}
 		} 
 		else
 		{	
@@ -92,8 +108,6 @@ public class BlockStore {
 		
 		InsertLeafIntoLRUList (leaf);
 		
-		RunGarbageCollector ();
-		
 		return true;
 	}
 	
@@ -102,8 +116,13 @@ public class BlockStore {
 
 		LongBuffer longBuffer = buffer.asLongBuffer();
 		
-		longBuffer.put(leaf.timeStamps);
-		longBuffer.put(leaf.IDs);
+		synchronized (leaf) {
+			longBuffer.put(leaf.timeStamps);
+
+			//clean again
+			leaf.lastWrite = -1;
+			leaf.lastFlush = new Date().getTime();
+		}
 		
 		long chunks = leaf.blockID / blocksPerSuperblock;
 		int chunkOffset = (int)(leaf.blockID % blocksPerSuperblock);
@@ -204,13 +223,16 @@ public class BlockStore {
 	}
 	
 	public void InitLeaf (TreeLeaf leaf) {
-		leaf.length = 0;
-		leaf.timeStamps = new long[BLOCK_SIZE];
-		leaf.IDs = new long[BLOCK_SIZE];		
+		synchronized (leaf) {
+			leaf.length = 0;
+			leaf.timeStamps = new long[BLOCK_SIZE];
+			
+			//block is still clean
+			leaf.lastWrite = -1;
+			leaf.lastFlush = new Date().getTime();
+		}
 
 		InsertLeafIntoLRUList (leaf);
-		
-		RunGarbageCollector ();
 	}
 	
 	public void InsertLeafIntoLRUList (TreeLeaf leaf) {
@@ -246,16 +268,35 @@ public class BlockStore {
 		while (LeafCount > MAX_LEAF_COUNT) {
 			TreeLeaf swapOutLeaf = RemoveLeafFromLRUList();
 				
-			SaveDataToDisk(swapOutLeaf.entityDescriptor.uuid, swapOutLeaf);
-			
-			swapOutLeaf.timeStamps = null;
-			swapOutLeaf.IDs = null;
-			swapOutLeaf.LRUprev = null;
-			swapOutLeaf.LRUnext = null;
+			synchronized (swapOutLeaf) {
+				SaveDataToDisk(swapOutLeaf.entityDescriptor.uuid, swapOutLeaf);
+				
+				swapOutLeaf.timeStamps = null;
+				swapOutLeaf.LRUprev = null;
+				swapOutLeaf.LRUnext = null;	
+			}
 		}		
 	}
 	
+	public void FlushCache() {
+		if (LeafCount == 0)
+			return;	//nothing to do
+		
+		TreeLeaf leaf = OldLeaf;
+		
+		while (leaf != null) {
+			if (leaf.lastWrite != -1) {
+				SaveDataToDisk(leaf.entityDescriptor.uuid, leaf);
+			}
+			
+			leaf = leaf.LRUprev;
+		}
+	}
+	
 	public void Shutdown () {
+		cacheFlushThreadActive = false;
+		cacheFlushThread.interrupt();
+		
 		synchronized (LRUListMutex) {
 			while (LRULeaf != null) {
 				SaveDataToDisk(LRULeaf.entityDescriptor.uuid, LRULeaf);
@@ -372,4 +413,20 @@ public class BlockStore {
 
 	long SuperblockCache[] = new long[BLOCK_SIZE * 2];
 	long SuperblockCacheID = -1;
+
+	@Override
+	public void run() {
+		while (cacheFlushThreadActive) {
+			FlushCache();
+			
+			RunGarbageCollector();
+		
+			try {
+				Thread.sleep(BLOCK_FLUSH_INTERVAL);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
+		}
+	}
 }

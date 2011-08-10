@@ -21,7 +21,8 @@ package org.hyperchron.impl;
 
 public class TreeLeaf extends TreeElement {
 	public long[] timeStamps = null;
-	public long[] IDs = null;
+	public long lastWrite = -1;
+	public long lastFlush = -1;
 	
 	public int length = 0;
 	
