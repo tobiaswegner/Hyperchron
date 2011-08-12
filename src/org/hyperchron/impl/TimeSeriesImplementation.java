@@ -54,6 +54,14 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 	public TimeSeriesImplementation() {		
 	}
 	
+	protected void finalize() throws Throwable {
+		try {
+			Shutdown();
+		} finally {
+			super.finalize();
+		}
+	}
+	
 	public void activate() {
 		tsFileDB = System.getProperty("timeseries.entityfile");
 		if (tsFileDB == null)
