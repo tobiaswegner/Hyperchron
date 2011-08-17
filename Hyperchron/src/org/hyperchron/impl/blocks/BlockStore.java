@@ -301,6 +301,11 @@ public class BlockStore implements Runnable {
 				leaf = leaf.LRUprev;
 			}			
 		}
+		
+		synchronized (SuperblockCache) {
+			if ((SuperblockCacheID != -1) && (SuperblockCacheDirty))
+				WriteBackSuperblock(SuperblockCacheID);			
+		}
 	}
 	
 	public void Shutdown () {
@@ -346,6 +351,8 @@ public class BlockStore implements Runnable {
 			}
 			
 			SuperblockCache[chunkOffset * SUPERBLOCK_ENTRIES + entry] = value;
+			
+			SuperblockCacheDirty = true;
 		}
 	}
 	
@@ -357,6 +364,8 @@ public class BlockStore implements Runnable {
 		longBuffer.put(SuperblockCache);
 		
 		WriteBlock (chunk * (1 + blocksPerSuperblock), buf);
+
+		SuperblockCacheDirty = false;
 	}
 	
 	protected boolean LoadSuperblock(long chunk) {
@@ -374,6 +383,7 @@ public class BlockStore implements Runnable {
 		}
 		
 		SuperblockCacheID = chunk;
+		SuperblockCacheDirty = false;		
 		
 		return LoadedFromDisk;
 	}
@@ -423,6 +433,7 @@ public class BlockStore implements Runnable {
 		}		
 	}
 
+	boolean SuperblockCacheDirty = false;
 	long SuperblockCache[] = new long[BLOCK_SIZE];
 	long SuperblockCacheID = -1;
 
