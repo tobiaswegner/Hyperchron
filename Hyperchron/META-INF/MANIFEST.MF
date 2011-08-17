@@ -2,8 +2,8 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: Hyperchron
 Bundle-SymbolicName: Hyperchron
-Bundle-Version: 1.0.0
+Bundle-Version: 1.0.0.qualifier
 Import-Package: org.hyperchron,
  org.osgi.framework;version="1.3.0"
 Bundle-RequiredExecutionEnvironment: JavaSE-1.6
-Service-Component: OSGI-INF/Hypercron.xml
+Service-Component: OSGI-INF/Hyperchron.xml
