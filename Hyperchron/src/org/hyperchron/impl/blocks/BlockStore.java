@@ -19,9 +19,9 @@
 
 package org.hyperchron.impl.blocks;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.nio.channels.FileChannel;
@@ -51,11 +51,19 @@ public class BlockStore implements Runnable {
 	protected Object GarbageCollectionInProgress = new Object();
 	
 	public String blockDB = null;
+	public RandomAccessFile blockDBFile = null;
 	
 	public BlockStore () {
 		blockDB = System.getProperty("timeseries.blockfile");
 		if (blockDB == null)
 			blockDB = "D:\\Temp\\ts\\block.db";
+		
+		try {
+			blockDBFile = new RandomAccessFile(blockDB, "rwd");
+		} catch (FileNotFoundException e) {
+			//Should never occur
+			e.printStackTrace();
+		}
 		
 		ReadHeader();
 		
@@ -163,8 +171,6 @@ public class BlockStore implements Runnable {
 	}
 	
 	public void WriteHeader () {
-		File file = new File(blockDB);
-		
 		long nextBlockID = getNextBlockID();
 
 		long chunks = nextBlockID / blocksPerSuperblock;
@@ -178,9 +184,7 @@ public class BlockStore implements Runnable {
 		}
 		
 		try {
-			FileOutputStream fos = new FileOutputStream(file, true);
-
-			FileChannel fc = fos.getChannel();
+			FileChannel fc = blockDBFile.getChannel();
 			
 			//LongBuffer longBuffer = fc.map(MapMode.READ_WRITE, leaf.blockID * BLOCK_SIZE * 2, BLOCK_SIZE * 2).asLongBuffer();
 			ByteBuffer buf = ByteBuffer.allocateDirect(8);
@@ -190,8 +194,6 @@ public class BlockStore implements Runnable {
 			longBuffer.put(nextBlockID);
 
 			fc.write(buf, blockID * BLOCK_SIZE_BYTES);
-			
-			fc.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}		
@@ -200,17 +202,13 @@ public class BlockStore implements Runnable {
 	public boolean ReadHeader () {
 		boolean LoadedDataFromDisk = false;
 		
-		File file = new File(blockDB);
-		
 		try {
-			FileInputStream fis = new FileInputStream(file);
-			
-			FileChannel fc = fis.getChannel();
+			FileChannel fc = blockDBFile.getChannel();
 			
 			//LongBuffer longBuffer = fc.map(MapMode.READ_ONLY, leaf.blockID * BLOCK_SIZE * 2, BLOCK_SIZE * 2).asLongBuffer();
 			ByteBuffer buf = ByteBuffer.allocateDirect(8);
 			
-			fc.read(buf, file.length() - 8);
+			fc.read(buf, blockDBFile.length() - 8);
 			
 			buf.flip();
 			
@@ -326,6 +324,12 @@ public class BlockStore implements Runnable {
 			WriteBackSuperblock(SuperblockCacheID);
 		
 		WriteHeader();
+		
+		try {
+			blockDBFile.close();
+		} catch (IOException e) {
+			e.printStackTrace();
+		}
 	}
 	
 	public long ReadFromSuperblock(long chunks, int chunkOffset, int entry) {
@@ -389,30 +393,20 @@ public class BlockStore implements Runnable {
 	}
 
 	protected void WriteBlock(long blockID, ByteBuffer buffer) {
-		File file = new File(blockDB);
-		
 		try {
-			FileOutputStream fos = new FileOutputStream(file, true);
-			
-			FileChannel fc = fos.getChannel();
+			FileChannel fc = blockDBFile.getChannel();
 			
 			long position = blockID * BLOCK_SIZE_BYTES;			
 			
 			fc.write(buffer, position);
-			
-			fc.close();
 		} catch (Exception e) {
 			e.printStackTrace();
 		}		
 	}
 	
 	protected LongBuffer ReadBlock(long blockID) {
-		File file = new File(blockDB);
-		
 		try {
-			FileInputStream fis = new FileInputStream(file);
-			
-			FileChannel fc = fis.getChannel();
+			FileChannel fc = blockDBFile.getChannel();
 			
 			ByteBuffer buf = ByteBuffer.allocateDirect(BLOCK_SIZE_BYTES);
 						
