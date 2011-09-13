@@ -31,7 +31,7 @@ import com.db4o.ObjectContainer;
 import com.db4o.ObjectSet;
 import com.db4o.query.Query;
 
-public class TimeSeriesImplementation implements TimeSeries/*, Runnable*/ {
+public class TimeSeriesImplementation implements TimeSeries {
 	protected ObjectContainer entityDB = null;
 
 	Hashtable<Long, TimeSeriesIterator> iterators = new Hashtable<Long, TimeSeriesIterator>();
@@ -43,11 +43,7 @@ public class TimeSeriesImplementation implements TimeSeries/*, Runnable*/ {
 	java.util.concurrent.atomic.AtomicLong entityID = new AtomicLong();	
 
 	volatile boolean ShuttingDown = false;
-	/*
-	Thread dumpEntitiesThread;
-	boolean dumpEntitiesThreadActive = true;
-	Object dumpEntitiesThreadNotifier = new Object();
-	*/
+
 	public long[] loadNextIDFromDB() {
 		final Query query = entityDB.query();
 		query.constrain(long[].class);
@@ -85,39 +81,6 @@ public class TimeSeriesImplementation implements TimeSeries/*, Runnable*/ {
 				entityDescriptions.put(entityDescriptor.uuid, entityDescriptor);
 			}
 		}
-		
-		
-/*		try
-		{
-			BufferedReader br = new BufferedReader(new FileReader(dbFile));
-			
-			String line;
-			
-			while ((line = br.readLine()) != null) {
-				long ID = Long.parseLong(br.readLine());
-				if (line.equals("ENTITY_ID")) {				
-					entityID.set(ID);
-				} else {
-					EntityDescriptor entityDescriptor = new EntityDescriptor(line, ID);
-					
-					Tree tree = new Tree(entityDescriptor);
-					entityDescriptor.tree = tree;
-
-					entityDescriptions.put(line, entityDescriptor);
-				}
-			}
-			
-			br.close();
-		} catch (Exception e) {
-			if (e instanceof FileNotFoundException) {
-				System.out.println ("Timeseries could not find entities, so create new db");
-			} else
-				e.printStackTrace();
-		}*/
-/*
-		dumpEntitiesThread = new Thread (this);
-		dumpEntitiesThread.setName("Dump entities thread");
-		dumpEntitiesThread.start();*/
 	}
 	
 	protected void finalize() throws Throwable {
@@ -290,73 +253,9 @@ public class TimeSeriesImplementation implements TimeSeries/*, Runnable*/ {
 	public void Shutdown () {
 		if (ShuttingDown)
 			return;
-		/*
-		dumpEntitiesThreadActive = false;
-		try {
-			synchronized (dumpEntitiesThreadNotifier) {
-				dumpEntitiesThreadNotifier.notify();
-			}
-			
-			dumpEntitiesThread.join();
-		} catch (InterruptedException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-		*/
+
 		ShuttingDown = true;
 		
 		BlockStore.instance.Shutdown();
-/*		
-		File dbFile = new File(tsFileDB);
-		
-		try
-		{
-			BufferedWriter bw = new BufferedWriter(new FileWriter(dbFile));
-			
-			for (EntityDescriptor entityDescriptor : entityDescriptions.values()) {
-				bw.write(entityDescriptor.uuid + "\r\n" + entityDescriptor.entityID + "\r\n");
-			}
-			
-			bw.write("ENTITY_ID\r\n" + entityID.get() + "\r\n");
-			
-			bw.flush();
-			
-			bw.close();
-		} catch (Exception e) {
-			e.printStackTrace();
-		}*/
 	}
-/*
-	@Override
-	public void run() {
-		while (dumpEntitiesThreadActive) {
-			synchronized (dumpEntitiesThreadNotifier) {
-				File dbFile = new File(tsFileDB + ".dmp");
-				
-				try
-				{
-					BufferedWriter bw = new BufferedWriter(new FileWriter(dbFile));
-					
-					for (EntityDescriptor entityDescriptor : entityDescriptions.values()) {
-						bw.write(entityDescriptor.uuid + "\r\n" + entityDescriptor.entityID + "\r\n");
-					}
-					
-					bw.write("ENTITY_ID\r\n" + entityID.get() + "\r\n");
-					
-					bw.flush();
-					
-					bw.close();
-				} catch (Exception e) {
-					e.printStackTrace();
-				}				
-				
-				try {
-					dumpEntitiesThreadNotifier.wait(5000);
-				} catch (InterruptedException e) {
-					// TODO Auto-generated catch block
-					e.printStackTrace();
-				}
-			}
-		}
-	}*/
 }
