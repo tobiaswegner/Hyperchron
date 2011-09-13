@@ -20,7 +20,7 @@
 package org.hyperchron.impl;
 
 public class EntityDescriptor {
-	public Tree	tree;
+	public transient Tree	tree;
 	public String uuid;
 	public long entityID; 
 	

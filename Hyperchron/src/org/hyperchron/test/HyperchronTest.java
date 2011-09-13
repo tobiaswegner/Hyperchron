@@ -24,6 +24,8 @@ import java.util.Random;
 
 import org.hyperchron.impl.TimeSeriesImplementation;
 
+import com.db4o.Db4oEmbedded;
+
 public class HyperchronTest {
 
 	protected static TimeSeriesImplementation ts = null;
@@ -76,18 +78,20 @@ public class HyperchronTest {
 	 * @param args
 	 */
 	public static void main(String[] args) {
-		ts = new TimeSeriesImplementation();
+		String databaseFileName = System.getProperty("timeseries.entityfile");
+		if (databaseFileName == null)
+			databaseFileName = "D:\\Temp\\ts\\entities.db";		
 		
-		ts.activate();
-
+		ts = new TimeSeriesImplementation(Db4oEmbedded.openFile(databaseFileName));
+		
 		long startTime = System.nanoTime();
 		long endTime = startTime;
 		
 		/*
 		 * 0 linear insert
 		 * 1 reverse linear insert
-		 * 3 data retrieval
-		 * 4 random data retrieval
+		 * 2 data retrieval
+		 * 3 random data retrieval
 		 */
 		
 		int bench = 2;
@@ -103,13 +107,6 @@ public class HyperchronTest {
 			
 			endTime = System.nanoTime();
 			
-			//give flush thread time to work
-			try {
-				Thread.sleep(5000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			
 			break;
 		case 1:
 			for (int i = offset + length - 1; i >= offset; i--) {
@@ -118,26 +115,11 @@ public class HyperchronTest {
 			
 			endTime = System.nanoTime();
 			
-			//give flush thread time to work
-			try {
-				Thread.sleep(5000);
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-			
 			break;
 		case 2:
 			checkValues (readTS("debug", 512 * 1024, 512 * 1024 + 1024), 512 * 1024, 1024);
 			checkValues (readTS("debug", 2 * 1024 * 1024, 2 * 1024 * 1024 + 1024), 2 * 1024 * 1024, 1024);
 			checkValues (readTS("debug", 16 * 1024 * 1024, 16 * 1024 * 1024 + 1024), 16 * 1024 * 1024, 1024);
-/*			
-			for (int i = 0; i < vals.size(); i++) {
-				TimedValue value = vals.get(i);
-				
-				if (!Long.toString(value.getTimeStamp()).equals(value.getValue())) {
-					System.out.println("Fatal error, db inconsistent");
-				}
-			}*/
 			
 			endTime = System.nanoTime();
 
@@ -157,7 +139,7 @@ public class HyperchronTest {
 		
 		System.out.println("Benchmark took " + (endTime-startTime) + "ns (" + ((endTime-startTime) / 1000000000.0) + "s )");
 		
-		ts.deactivate();
+		ts.Shutdown();
 	}
 
 }

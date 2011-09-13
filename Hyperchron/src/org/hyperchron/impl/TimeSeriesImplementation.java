@@ -19,12 +19,6 @@
 
 package org.hyperchron.impl;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Random;
@@ -33,7 +27,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.hyperchron.TimeSeries;
 import org.hyperchron.impl.blocks.BlockStore;
 
-public class TimeSeriesImplementation implements TimeSeries, Runnable {
+import com.db4o.ObjectContainer;
+import com.db4o.ObjectSet;
+import com.db4o.query.Query;
+
+public class TimeSeriesImplementation implements TimeSeries/*, Runnable*/ {
+	protected ObjectContainer entityDB = null;
 
 	Hashtable<Long, TimeSeriesIterator> iterators = new Hashtable<Long, TimeSeriesIterator>();
 	
@@ -43,33 +42,52 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 	
 	java.util.concurrent.atomic.AtomicLong entityID = new AtomicLong();	
 
-	public String tsFileDB = null;
-	
 	volatile boolean ShuttingDown = false;
-	
+	/*
 	Thread dumpEntitiesThread;
 	boolean dumpEntitiesThreadActive = true;
 	Object dumpEntitiesThreadNotifier = new Object();
+	*/
+	public long[] loadNextIDFromDB() {
+		final Query query = entityDB.query();
+		query.constrain(long[].class);
 
-	public TimeSeriesImplementation() {		
-	}
-	
-	protected void finalize() throws Throwable {
-		try {
-			Shutdown();
-		} finally {
-			super.finalize();
-		}
-	}
-	
-	public void activate() {
-		tsFileDB = System.getProperty("timeseries.entityfile");
-		if (tsFileDB == null)
-			tsFileDB = "D:\\Temp\\ts\\entities.db";		
-
-		File dbFile = new File(tsFileDB);
+		ObjectSet<long[]> qresult = query.execute();
 		
-		try
+		if (qresult.size() > 0) {
+			return qresult.next();
+		}
+		
+		return null;
+	}
+	
+	public TimeSeriesImplementation(ObjectContainer entityDB) {
+		this.entityDB = entityDB;
+	
+		long[] nextID = loadNextIDFromDB();
+		
+		if (nextID != null) {
+			entityID.set(nextID[0]);
+		}
+
+		{
+			final Query query = entityDB.query();
+			query.constrain(EntityDescriptor.class);
+	
+			ObjectSet<EntityDescriptor> qresult = query.execute();
+			
+			while (qresult.hasNext()) {
+				EntityDescriptor entityDescriptor = qresult.next();
+				
+				Tree tree = new Tree(entityDescriptor);
+				entityDescriptor.tree = tree;
+	
+				entityDescriptions.put(entityDescriptor.uuid, entityDescriptor);
+			}
+		}
+		
+		
+/*		try
 		{
 			BufferedReader br = new BufferedReader(new FileReader(dbFile));
 			
@@ -95,15 +113,19 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 				System.out.println ("Timeseries could not find entities, so create new db");
 			} else
 				e.printStackTrace();
-		}
-		
+		}*/
+/*
 		dumpEntitiesThread = new Thread (this);
 		dumpEntitiesThread.setName("Dump entities thread");
-		dumpEntitiesThread.start();
+		dumpEntitiesThread.start();*/
 	}
 	
-	public void deactivate() {
-		Shutdown();
+	protected void finalize() throws Throwable {
+		try {
+			Shutdown();
+		} finally {
+			super.finalize();
+		}
 	}
 	
 	@Override
@@ -238,12 +260,25 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 		EntityDescriptor entityDescriptor = entityDescriptions.get(key);
 		
 		if (entityDescriptor == null) {
-			entityDescriptor = new EntityDescriptor(key, entityID.getAndIncrement());
+			long nextID = entityID.getAndIncrement();
+			
+			long[] nextIDObj = loadNextIDFromDB();
+			
+			if (nextIDObj == null)
+				nextIDObj = new long[1];
+			
+			nextIDObj[0] = nextID;
+			
+			entityDB.store(nextIDObj);
+			
+			entityDescriptor = new EntityDescriptor(key, nextID);
 
 			Tree tree = new Tree(entityDescriptor);
 			entityDescriptor.tree = tree;
 
 			entityDescriptions.put(key, entityDescriptor);
+			
+			entityDB.store(entityDescriptor);
 		}
 
 		entityDescriptor.tree.SaveTimestamp(Timestamp);
@@ -255,7 +290,7 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 	public void Shutdown () {
 		if (ShuttingDown)
 			return;
-		
+		/*
 		dumpEntitiesThreadActive = false;
 		try {
 			synchronized (dumpEntitiesThreadNotifier) {
@@ -267,11 +302,11 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 			// TODO Auto-generated catch block
 			e1.printStackTrace();
 		}
-		
+		*/
 		ShuttingDown = true;
 		
 		BlockStore.instance.Shutdown();
-		
+/*		
 		File dbFile = new File(tsFileDB);
 		
 		try
@@ -289,9 +324,9 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 			bw.close();
 		} catch (Exception e) {
 			e.printStackTrace();
-		}
+		}*/
 	}
-
+/*
 	@Override
 	public void run() {
 		while (dumpEntitiesThreadActive) {
@@ -323,5 +358,5 @@ public class TimeSeriesImplementation implements TimeSeries, Runnable {
 				}
 			}
 		}
-	}
+	}*/
 }
