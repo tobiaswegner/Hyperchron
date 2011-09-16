@@ -20,7 +20,7 @@ public class OSGiComponent {
 		
 		tsFileDB = System.getProperty("timeseries.entityfile");
 		if (tsFileDB == null)
-			tsFileDB = "D:\\Temp\\ts\\entities.db";		
+			tsFileDB = context.getBundleContext().getDataFile("entities.db").getAbsolutePath();		
 
 		timeSeries = new TimeSeriesImplementation(db4o.openFile(tsFileDB));
 		
