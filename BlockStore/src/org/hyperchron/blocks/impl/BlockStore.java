@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-package org.hyperchron.impl.blocks;
+package org.hyperchron.blocks.impl;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -27,8 +27,6 @@ import java.nio.LongBuffer;
 import java.nio.channels.FileChannel;
 import java.util.Date;
 import java.util.concurrent.atomic.AtomicLong;
-
-import org.hyperchron.impl.TreeLeaf;
 
 public class BlockStore implements Runnable {
 	public static int BLOCK_SIZE = 4096;	
@@ -53,11 +51,7 @@ public class BlockStore implements Runnable {
 	public String blockDB = null;
 	public RandomAccessFile blockDBFile = null;
 	
-	public BlockStore () {
-		blockDB = System.getProperty("timeseries.blockfile");
-		if (blockDB == null)
-			blockDB = "D:\\Temp\\ts\\block.db";
-		
+	public BlockStore (String blockDB) {	
 		try {
 			blockDBFile = new RandomAccessFile(blockDB, "rwd");
 		} catch (FileNotFoundException e) {
