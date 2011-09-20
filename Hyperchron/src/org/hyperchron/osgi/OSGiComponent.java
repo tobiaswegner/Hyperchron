@@ -1,10 +1,16 @@
 package org.hyperchron.osgi;
 
+import java.io.FileNotFoundException;
+
 import org.hyperchron.TimeSeries;
+import org.hyperchron.blocks.BlockStoreFactory;
+import org.hyperchron.blocks.BlockStoreMetric;
+import org.hyperchron.impl.HyperchronMetrics;
 import org.hyperchron.impl.TimeSeriesImplementation;
 import org.osgi.framework.ServiceRegistration;
 import org.osgi.service.component.ComponentContext;
 
+import com.db4o.ext.Db4oException;
 import com.db4o.osgi.Db4oService;
 
 public class OSGiComponent {
@@ -14,6 +20,7 @@ public class OSGiComponent {
 	protected ComponentContext context = null;
 	
 	public String tsFileDB = null;
+	public String blockDB = null;
 		
 	public void activate(ComponentContext context) {
 		this.context = context;
@@ -22,9 +29,21 @@ public class OSGiComponent {
 		if (tsFileDB == null)
 			tsFileDB = context.getBundleContext().getDataFile("entities.db").getAbsolutePath();		
 
-		timeSeries = new TimeSeriesImplementation(db4o.openFile(tsFileDB));
+		blockDB = System.getProperty("timeseries.blockfile");
+		if (blockDB == null)
+			blockDB = "D:\\Temp\\ts\\block.db";
 		
-		timeSeriesRegistration = context.getBundleContext().registerService(TimeSeries.class.getName(), timeSeries, null);
+		try {
+			timeSeries = new TimeSeriesImplementation(db4o.openFile(tsFileDB), BlockStoreFactory.openBlockStore(blockDB, new BlockStoreMetric(HyperchronMetrics.BLOCK_SIZE, HyperchronMetrics.SUPERBLOCK_ENTRIES)));
+
+			timeSeriesRegistration = context.getBundleContext().registerService(TimeSeries.class.getName(), timeSeries, null);
+		} catch (Db4oException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		} catch (FileNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 	}	
 	
 	public void deactivate() {

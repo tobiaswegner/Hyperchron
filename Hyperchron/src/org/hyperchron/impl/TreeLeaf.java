@@ -19,12 +19,20 @@
 
 package org.hyperchron.impl;
 
+import java.nio.LongBuffer;
+
 public class TreeLeaf extends TreeElement {
-	public long[] timeStamps = null;
+	public LongBuffer timeStamps = null;
 	public long lastWrite = -1;
 	public long lastFlush = -1;
 	
-	public int length = 0;
+	private int length = 0;
+	public void initLength(int length) { this.length = length; };
+	public void setLength(int length) { this.length = length; tree.blockStore.WriteToSuperblock(getChunkID(), getOffsetInChunk(), 2, length); };
+	public int getLength () { return length; };
+	
+	public void initStartingTimestamp(long startingTimestamp) { this.startingTimestamp = startingTimestamp; };
+	public void setStartingTimestamp(long startingTimestamp) { this.startingTimestamp = startingTimestamp; tree.blockStore.WriteToSuperblock(getChunkID(), getOffsetInChunk(), 1, startingTimestamp); };
 	
 	public long startingRevision = -1;
 	
@@ -39,8 +47,29 @@ public class TreeLeaf extends TreeElement {
 	public TreeLeaf LRUprev = null;
 	public TreeLeaf LRUnext = null;
 	
-	public TreeLeaf(long blockID, long entityID) {
+	public Tree tree;
+	
+	public TreeLeaf(long chunkID, long blockOffset, long entityID, Tree tree) {
+		this(chunkID * HyperchronMetrics.blocksPerSuperblock + blockOffset, entityID, tree);
+	}
+
+	public TreeLeaf(long blockID, long entityID, Tree tree) {
 		this.blockID = blockID;
 		this.entityID = entityID;
+		this.tree = tree;
+		
+		tree.blockStore.WriteToSuperblock(getChunkID(), getOffsetInChunk(), 0, entityID);
+	}
+	
+	public int getOffsetInChunk() {
+		return (int)(blockID % HyperchronMetrics.blocksPerSuperblock);
+	}
+	
+	public long getChunkID() {
+		return blockID / HyperchronMetrics.blocksPerSuperblock;
+	}
+	
+	public int getOffsetInBuffer() {
+		return getOffsetInChunk() * HyperchronMetrics.BLOCK_SIZE;
 	}
 }

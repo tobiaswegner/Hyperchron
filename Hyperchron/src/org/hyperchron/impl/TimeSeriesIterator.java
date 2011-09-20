@@ -19,8 +19,7 @@
 
 package org.hyperchron.impl;
 
-import org.hyperchron.impl.blocks.BlockStore;
-
+import org.hyperchron.blocks.BlockStore;
 
 public class TimeSeriesIterator {
 	public Tree tree = null;
@@ -33,7 +32,7 @@ public class TimeSeriesIterator {
 	}
 	
 	public void next () {
-		if (currentIndex < currentLeaf.length - 1) {
+		if (currentIndex < currentLeaf.getLength() - 1) {
 			currentIndex++;
 		} else {
 			if (currentLeaf.nextSibling != null) {
@@ -83,7 +82,7 @@ public class TimeSeriesIterator {
 		} else {
 			if (currentLeaf.previousSibling != null) {
 				currentLeaf = (TreeLeaf)currentLeaf.previousSibling;
-				currentIndex = currentLeaf.length - 1;
+				currentIndex = currentLeaf.getLength() - 1;
 			}
 		}
 	}
@@ -105,7 +104,7 @@ public class TimeSeriesIterator {
 					return currentRevision;
 				
 				currentLeaf = currentLeaf.previousSibling;
-				currentIndex = currentLeaf.length - 1;
+				currentIndex = currentLeaf.getLength() - 1;
 				
 				currentRevision++;
 				steps--;
@@ -124,11 +123,12 @@ public class TimeSeriesIterator {
 	
 	public long getTimeStamp() {
 		if (currentLeaf.timeStamps == null)
-			BlockStore.instance.LoadDataIntoLeaf(currentLeaf.entityDescriptor.uuid, currentLeaf, true);
+//			 BlockStore.instance.LoadDataIntoLeaf(currentLeaf.entityDescriptor.uuid, currentLeaf, true);
+			tree.blockStore.loadChunk(currentLeaf.getChunkID());
 
 		synchronized (currentLeaf) {
-			if (currentIndex < currentLeaf.length) {				
-				return currentLeaf.timeStamps[currentIndex];
+			if (currentIndex < currentLeaf.getLength()) {				
+				return currentLeaf.timeStamps.get(currentLeaf.getOffsetInBuffer() + currentIndex);
 			}			
 		}
 		
@@ -137,6 +137,6 @@ public class TimeSeriesIterator {
 	}
 	
 	public int revisionsLeftInCurrentLeaf () {
-		return currentLeaf.length - currentIndex - 1;
+		return currentLeaf.getLength() - currentIndex - 1;
 	}
 }

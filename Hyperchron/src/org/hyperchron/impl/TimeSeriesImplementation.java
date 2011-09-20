@@ -25,7 +25,7 @@ import java.util.Random;
 import java.util.concurrent.atomic.AtomicLong;
 
 import org.hyperchron.TimeSeries;
-import org.hyperchron.impl.blocks.BlockStore;
+import org.hyperchron.blocks.BlockStore;
 
 import com.db4o.ObjectContainer;
 import com.db4o.ObjectSet;
@@ -33,6 +33,7 @@ import com.db4o.query.Query;
 
 public class TimeSeriesImplementation implements TimeSeries {
 	protected ObjectContainer entityDB = null;
+	protected BlockStore blockStore = null;
 
 	Hashtable<Long, TimeSeriesIterator> iterators = new Hashtable<Long, TimeSeriesIterator>();
 	
@@ -57,8 +58,9 @@ public class TimeSeriesImplementation implements TimeSeries {
 		return null;
 	}
 	
-	public TimeSeriesImplementation(ObjectContainer entityDB) {
+	public TimeSeriesImplementation(ObjectContainer entityDB, BlockStore blockStore) {
 		this.entityDB = entityDB;
+		this.blockStore = blockStore;
 	
 		long[] nextID = loadNextIDFromDB();
 		
@@ -75,7 +77,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 			while (qresult.hasNext()) {
 				EntityDescriptor entityDescriptor = qresult.next();
 				
-				Tree tree = new Tree(entityDescriptor);
+				Tree tree = new Tree(entityDescriptor, blockStore);
 				entityDescriptor.tree = tree;
 	
 				entityDescriptions.put(entityDescriptor.uuid, entityDescriptor);
@@ -132,7 +134,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 
 		TreeLeaf lastLeaf = timeSeriesIterator.tree.getLastLeaf();
 
-		while (lastLeaf.length == 0) {
+		while (lastLeaf.getLength() == 0) {
 			if (lastLeaf.previousSibling != null)
 				lastLeaf = lastLeaf.previousSibling;
 			else
@@ -140,7 +142,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 		}			
 		
 		timeSeriesIterator.currentLeaf = lastLeaf;
-		timeSeriesIterator.currentIndex = lastLeaf.length - 1;
+		timeSeriesIterator.currentIndex = lastLeaf.getLength() - 1;
 	}
 
 	@Override
@@ -236,7 +238,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 			
 			entityDescriptor = new EntityDescriptor(key, nextID);
 
-			Tree tree = new Tree(entityDescriptor);
+			Tree tree = new Tree(entityDescriptor, blockStore);
 			entityDescriptor.tree = tree;
 
 			entityDescriptions.put(key, entityDescriptor);
@@ -256,6 +258,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 
 		ShuttingDown = true;
 		
-		BlockStore.instance.Shutdown();
+		if (blockStore != null)
+			blockStore.Shutdown();
 	}
 }

@@ -19,9 +19,13 @@
 
 package org.hyperchron.test;
 
+import java.io.FileNotFoundException;
 import java.util.ArrayList;
 import java.util.Random;
 
+import org.hyperchron.blocks.BlockStoreFactory;
+import org.hyperchron.blocks.BlockStoreMetric;
+import org.hyperchron.impl.HyperchronMetrics;
 import org.hyperchron.impl.TimeSeriesImplementation;
 
 import com.db4o.Db4oEmbedded;
@@ -82,64 +86,72 @@ public class HyperchronTest {
 		if (databaseFileName == null)
 			databaseFileName = "D:\\Temp\\ts\\entities.db";		
 		
-		ts = new TimeSeriesImplementation(Db4oEmbedded.openFile(databaseFileName));
-		
-		long startTime = System.nanoTime();
-		long endTime = startTime;
-		
-		/*
-		 * 0 linear insert
-		 * 1 reverse linear insert
-		 * 2 data retrieval
-		 * 3 random data retrieval
-		 */
-		
-		int bench = 2;
+		String blockDB = System.getProperty("timeseries.blockfile");
+		if (blockDB == null)
+			blockDB = "D:\\Temp\\ts\\block.db";
 
-		int offset = 0;
-		int length = 64 * 1024 * 1024;
-		
-		switch (bench) {
-		case 0:
-			for (int i = offset; i < offset + length; i++) {
-				ts.saveTimestamp("debug", i);
+		try {
+			ts = new TimeSeriesImplementation(Db4oEmbedded.openFile(databaseFileName), BlockStoreFactory.openBlockStore(blockDB, new BlockStoreMetric(HyperchronMetrics.BLOCK_SIZE, HyperchronMetrics.SUPERBLOCK_ENTRIES)));
+			
+			long startTime = System.nanoTime();
+			long endTime = startTime;
+			
+			/*
+			 * 0 linear insert
+			 * 1 reverse linear insert
+			 * 2 data retrieval
+			 * 3 random data retrieval
+			 */
+			
+			int bench = 0;
+	
+			int offset = 0;
+			int length = 256 * 1024 * 1024;
+			
+			switch (bench) {
+			case 0:
+				for (int i = offset; i < offset + length; i++) {
+					ts.saveTimestamp("debug", i);
+				}
+				
+				endTime = System.nanoTime();
+				
+				break;
+			case 1:
+				for (int i = offset + length - 1; i >= offset; i--) {
+					ts.saveTimestamp("debug", i);
+				}
+				
+				endTime = System.nanoTime();
+				
+				break;
+			case 2:
+				checkValues (readTS("debug", 512 * 1024, 512 * 1024 + 1024), 512 * 1024, 1024);
+				checkValues (readTS("debug", 2 * 1024 * 1024, 2 * 1024 * 1024 + 1024), 2 * 1024 * 1024, 1024);
+				checkValues (readTS("debug", 16 * 1024 * 1024, 16 * 1024 * 1024 + 1024), 16 * 1024 * 1024, 1024);
+				
+				endTime = System.nanoTime();
+	
+				break;
+			case 3:
+				Random rnd = new Random();
+				
+				for (int i = 0; i < 1024; i++) {
+					checkValue("debug", offset + rnd.nextInt(length));
+				}
+				
+				endTime = System.nanoTime();
+				
+				break;
+			default:
 			}
 			
-			endTime = System.nanoTime();
+			System.out.println("Benchmark took " + (endTime-startTime) + "ns (" + ((endTime-startTime) / 1000000000.0) + "s )");
 			
-			break;
-		case 1:
-			for (int i = offset + length - 1; i >= offset; i--) {
-				ts.saveTimestamp("debug", i);
-			}
-			
-			endTime = System.nanoTime();
-			
-			break;
-		case 2:
-			checkValues (readTS("debug", 512 * 1024, 512 * 1024 + 1024), 512 * 1024, 1024);
-			checkValues (readTS("debug", 2 * 1024 * 1024, 2 * 1024 * 1024 + 1024), 2 * 1024 * 1024, 1024);
-			checkValues (readTS("debug", 16 * 1024 * 1024, 16 * 1024 * 1024 + 1024), 16 * 1024 * 1024, 1024);
-			
-			endTime = System.nanoTime();
-
-			break;
-		case 3:
-			Random rnd = new Random();
-			
-			for (int i = 0; i < 1024; i++) {
-				checkValue("debug", offset + rnd.nextInt(length));
-			}
-			
-			endTime = System.nanoTime();
-			
-			break;
-		default:
+			ts.Shutdown();
+		} catch (FileNotFoundException e) {
+			e.printStackTrace();
 		}
-		
-		System.out.println("Benchmark took " + (endTime-startTime) + "ns (" + ((endTime-startTime) / 1000000000.0) + "s )");
-		
-		ts.Shutdown();
 	}
 
 }

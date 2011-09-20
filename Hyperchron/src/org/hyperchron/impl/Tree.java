@@ -19,12 +19,11 @@
 
 package org.hyperchron.impl;
 
-import java.util.Arrays;
+import java.nio.LongBuffer;
 import java.util.Date;
 
-import org.hyperchron.impl.blocks.BlockStore;
-
 public class Tree {
+	org.hyperchron.blocks.BlockStore blockStore = null;
 	TreeNode rootNode = null;
 
 	public static int RESERVED_SIZE = 4;
@@ -33,7 +32,9 @@ public class Tree {
 	
 	public String uuid;	
 	
-	public Tree (EntityDescriptor entityDescriptor) {
+	public Tree (EntityDescriptor entityDescriptor, org.hyperchron.blocks.BlockStore blockStore) {
+		this.blockStore = blockStore;
+		
 		uuid = entityDescriptor.uuid;
 		
 		rootNode = new TreeNode(null, entityDescriptor);
@@ -44,13 +45,13 @@ public class Tree {
 		int chunkOffset = 0;
 		
 		while (true) {
-			long entityID = BlockStore.instance.ReadFromSuperblock(chunk, chunkOffset, 0);
+			long entityID = blockStore.ReadFromSuperblock(chunk, chunkOffset, 0);
 			
 			if (entityID == -1)
 				break;
 			
 			if (entityID == entityDescriptor.entityID) {
-				leaf = new TreeLeaf(chunkOffset + BlockStore.instance.blocksPerSuperblock * chunk, entityDescriptor.entityID);
+				leaf = new TreeLeaf(chunk, chunkOffset, entityDescriptor.entityID, this);
 
 				leaf.parent = rootNode;
 				leaf.entityDescriptor = entityDescriptor;
@@ -61,13 +62,13 @@ public class Tree {
 					leaf.startingTimestamp = 0;
 				}
 				else*/
-				leaf.startingTimestamp = BlockStore.instance.ReadFromSuperblock(chunk, chunkOffset, 1);
-				leaf.length = (int)BlockStore.instance.ReadFromSuperblock(chunk, chunkOffset, 2);
+				leaf.initStartingTimestamp ( blockStore.ReadFromSuperblock(chunk, chunkOffset, 1) );
+				leaf.initLength ((int)blockStore.ReadFromSuperblock(chunk, chunkOffset, 2));
 				
 				AddLeaveToNode (leaf, rootNode);
 			}
 			
-			if (++chunkOffset >= BlockStore.instance.blocksPerSuperblock) {
+			if (++chunkOffset >= HyperchronMetrics.blocksPerSuperblock) {
 				chunkOffset = 0;
 				chunk++;
 			}
@@ -91,12 +92,12 @@ public class Tree {
 			}
 		}
 		else {
-			leaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), entityDescriptor.entityID);
+			leaf = new TreeLeaf(blockStore.getNextBlockID(), entityDescriptor.entityID, this);
 
 			leaf.parent = rootNode;
 			leaf.entityDescriptor = entityDescriptor;
 			
-			leaf.startingTimestamp = 0;
+			leaf.setStartingTimestamp ( 0 );
 			
 			rootNode.children.add(leaf);			
 		}
@@ -327,17 +328,18 @@ public class Tree {
 	}
 	
 	public int GetIndexForTimestamp(TreeLeaf leaf, long timestamp) {
-		if (leaf.length > 0) {
+		if (leaf.getLength() > 0) {
 			synchronized (leaf) {
 				if (leaf.timeStamps == null)
-					BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
+//					BlockStore.instance.LoadDataIntoLeaf(leaf.entityDescriptor.uuid, leaf, true);
+					leaf.timeStamps = blockStore.loadChunk(leaf.getChunkID());
 				
-				int index = Arrays.binarySearch(leaf.timeStamps, 0, leaf.length - 1, timestamp);
+				int index = binarySearch(leaf.timeStamps, leaf.getOffsetInBuffer(), leaf.getOffsetInBuffer() + leaf.getLength() - 1, timestamp);
 
 				if (index < 0)
 					index = -(index + 1);
 				
-				return index;
+				return index - leaf.getOffsetInBuffer();
 			}		
 		}
 		
@@ -346,42 +348,45 @@ public class Tree {
 	
 	public boolean SaveTimestamp(TreeLeaf leaf, long timestamp) {
 		if (leaf.timeStamps == null)
-			BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+//			BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+			leaf.timeStamps = blockStore.loadChunk(leaf.getChunkID());
 			
 		int index = -1; 
 		
 		synchronized (leaf) {
 			index = GetIndexForTimestamp(leaf, timestamp);
 			
-			if ((leaf.timeStamps[index] == timestamp) && (index < leaf.length))
+			if ((leaf.timeStamps.get(leaf.getOffsetInBuffer() + index) == timestamp) && (index < leaf.getLength()))
 			{
 				//already in index
 				return true;
 			}
 		}			
 
-		if (leaf.length == BlockStore.BLOCK_SIZE) {
-			Split(leaf, timestamp > leaf.timeStamps[BlockStore.BLOCK_SIZE - 1]);
+		if (leaf.getLength() == HyperchronMetrics.BLOCK_SIZE) {
+			Split(leaf, timestamp > leaf.timeStamps.get(leaf.getOffsetInBuffer() + HyperchronMetrics.BLOCK_SIZE - 1));
 			
 			return false;
 		}
 			
 		synchronized (leaf) {
-			if (leaf.length == 0) {
-				leaf.timeStamps[0] = timestamp;
+			if (leaf.getLength() == 0) {
+				leaf.timeStamps.put(leaf.getOffsetInBuffer(), timestamp);
 				
-				leaf.length = 1;
-			} else if (timestamp > leaf.timeStamps[leaf.length - 1]) {
-				leaf.timeStamps[leaf.length] = timestamp;
+				leaf.setLength(1);
+			} else if (timestamp > leaf.timeStamps.get(leaf.getOffsetInBuffer() + leaf.getLength() - 1)) {
+				leaf.timeStamps.put(leaf.getOffsetInBuffer() + leaf.getLength(), timestamp);
 				
-				leaf.length++;
+				leaf.setLength(leaf.getLength() + 1);
 			} else {
-				System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.length - index);
+				System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.getLength() - index);
 				
-				leaf.timeStamps[index] = timestamp;
+				leaf.timeStamps.put(leaf.getOffsetInBuffer() + index, timestamp);
 				
-				leaf.length++;
+				leaf.setLength(leaf.getLength() + 1);
 			}
+			
+			blockStore.WriteToSuperblock(leaf.getChunkID(), leaf.getOffsetInChunk(), 2, leaf.getLength());
 			
 			leaf.lastWrite = new Date().getTime();
 		}
@@ -392,11 +397,11 @@ public class Tree {
 	public void Split(TreeLeaf leaf, boolean append) {
 		if (append) {
 			//last block, so just append a new one
-			leaf.endingTimestamp = leaf.timeStamps[leaf.timeStamps.length - 1];
+			leaf.endingTimestamp = leaf.timeStamps.get(leaf.getOffsetInBuffer() + HyperchronMetrics.BLOCK_SIZE - 1);
 			
-			TreeLeaf newLeaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), leaf.entityDescriptor.entityID);
+			TreeLeaf newLeaf = new TreeLeaf(blockStore.getNextBlockID(), leaf.entityDescriptor.entityID, leaf.tree);
 			
-			newLeaf.startingTimestamp = leaf.endingTimestamp + 1;
+			newLeaf.setStartingTimestamp ( leaf.endingTimestamp + 1 );
 			
 			newLeaf.entityDescriptor = leaf.entityDescriptor;
 			
@@ -409,11 +414,11 @@ public class Tree {
 		} else {
 			synchronized (leaf) {
 				//split in half
-				int splitPosition = BlockStore.BLOCK_SIZE / 2;
+				int splitPosition = HyperchronMetrics.BLOCK_SIZE / 2;
 				
-				long splitTime = leaf.timeStamps[splitPosition];
+				long splitTime = leaf.timeStamps.get(leaf.getOffsetInBuffer() + splitPosition);
 				
-				TreeLeaf newLeaf = new TreeLeaf(BlockStore.instance.getNextBlockID(), leaf.entityDescriptor.entityID);
+				TreeLeaf newLeaf = new TreeLeaf(blockStore.getNextBlockID(), leaf.entityDescriptor.entityID, leaf.tree);
 				
 				synchronized (newLeaf) {
 					newLeaf.entityDescriptor = leaf.entityDescriptor;
@@ -424,15 +429,19 @@ public class Tree {
 					leaf.nextSibling = newLeaf;
 					
 					newLeaf.endingTimestamp = leaf.endingTimestamp;
-					newLeaf.startingTimestamp = splitTime;
+					newLeaf.setStartingTimestamp(splitTime);
 					leaf.endingTimestamp = splitTime;
 					
-					newLeaf.length = leaf.length - splitPosition;
-					leaf.length = splitPosition;
+					newLeaf.setLength(leaf.getLength() - splitPosition);
+					leaf.setLength(splitPosition);
 
-					newLeaf.timeStamps = new long [BlockStore.BLOCK_SIZE];
+					//newLeaf.timeStamps = new long [HyperchronMetrics.BLOCK_SIZE];
+					newLeaf.timeStamps = blockStore.loadChunk(newLeaf.getChunkID());
 					
-					System.arraycopy(leaf.timeStamps, splitPosition, newLeaf.timeStamps, 0, newLeaf.length);
+//					System.arraycopy(leaf.timeStamps, splitPosition, newLeaf.timeStamps, 0, newLeaf.length);
+					for (int i = 0; i < newLeaf.getLength(); i++) {
+						newLeaf.timeStamps.put(newLeaf.getOffsetInBuffer() + i, leaf.timeStamps.get(leaf.getOffsetInBuffer() + splitPosition + i));
+					}
 					
 					leaf.lastWrite = new Date().getTime();
 					newLeaf.lastWrite = leaf.lastWrite;					
@@ -449,7 +458,7 @@ public class Tree {
 					}
 				}
 				
-				BlockStore.instance.InsertLeafIntoLRUList(newLeaf);
+//				BlockStore.instance.InsertLeafIntoLRUList(newLeaf);
 			}
 		}
 		
@@ -469,12 +478,13 @@ public class Tree {
 */	
 	
 	public long getTimeStampForIndex(TreeLeaf leaf, int index) {
-		if (index < leaf.length) {
+		if (index < leaf.getLength()) {
 			synchronized (leaf) {
 				if (leaf.timeStamps == null)
-					BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+//					BlockStore.instance.LoadDataIntoLeaf(rootNode.entityDescriptor.uuid, leaf, true);
+					leaf.timeStamps = blockStore.loadChunk(leaf.getChunkID());
 					
-				return leaf.timeStamps[index];				
+				return leaf.timeStamps.get(leaf.getOffsetInBuffer() + index);				
 			}
 		}
 
@@ -482,7 +492,7 @@ public class Tree {
 	}
 
 	public int getLastIndex (TreeLeaf leaf) {
-		return leaf.length - 1;
+		return leaf.getLength() - 1;
 	}	
 	
 	/*
@@ -534,5 +544,24 @@ public class Tree {
 			return (TreeLeaf) rootElement;
 			
 		return null;
+	}
+	
+	public int binarySearch(LongBuffer data, int fromIndex, int toIndex, long key) {
+		--toIndex;
+		
+		while (fromIndex <= toIndex) {
+			int mid = (fromIndex + toIndex) >> 1;
+		
+			long e = data.get(mid);
+			
+			if (key > e)
+				fromIndex = mid + 1;
+			else if (key < e)
+				toIndex = mid - 1;
+			else
+				return mid; // key found
+		}
+		
+		return ~fromIndex;
 	}
 }
