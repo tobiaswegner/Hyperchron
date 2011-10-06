@@ -31,7 +31,7 @@ public class OSGiComponent {
 
 		blockDB = System.getProperty("timeseries.blockfile");
 		if (blockDB == null)
-			blockDB = "D:\\Temp\\ts\\block.db";
+			blockDB = context.getBundleContext().getDataFile("block.db").getAbsolutePath();
 		
 		try {
 			timeSeries = new TimeSeriesImplementation(db4o.openFile(tsFileDB), BlockStoreFactory.openBlockStore(blockDB, new BlockStoreMetric(HyperchronMetrics.BLOCK_SIZE, HyperchronMetrics.SUPERBLOCK_ENTRIES)));
