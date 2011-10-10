@@ -15,7 +15,9 @@ import org.hyperchron.blocks.BlockStoreMetric;
 public class MappedBlockStore implements BlockStore {
 	protected final int FILE_HEADER_OFFSET_BLOCK_ID = 0; 
 	
-	protected final long FILE_HEADER_SIZE = 256;
+	protected final int FILE_HEADER_SIZE = 256;
+	protected final int FILE_HEADER_OFFSET = 128;
+	protected final int FILE_HEADER_OFFSET_INDEX = FILE_HEADER_OFFSET / 8;
 	protected LongBuffer fileHeaderBuffer = null;
 	
 	protected Hashtable<Long, LongBuffer> openFileMappings = new Hashtable<Long, LongBuffer>();
@@ -110,6 +112,20 @@ public class MappedBlockStore implements BlockStore {
 		}
 
 		buffer.put(metric.getBlocksPerSuperblock() * metric.BLOCK_SIZE + chunkOffset * metric.SUPERBLOCK_ENTRIES + entry, value);		
+	}
+
+	@Override
+	public long ReadFromHeader(int entry) {
+		if (entry < (FILE_HEADER_SIZE - FILE_HEADER_OFFSET) / 8)
+			return fileHeaderBuffer.get(entry + FILE_HEADER_OFFSET_INDEX);
+		else
+			return -1;
+	}
+	
+	@Override
+	public void WriteToHeader(int entry, long value) {
+		if (entry < (FILE_HEADER_SIZE - FILE_HEADER_OFFSET) / 8)
+			fileHeaderBuffer.put(entry + FILE_HEADER_OFFSET_INDEX, value);		
 	}
 
 	@Override
