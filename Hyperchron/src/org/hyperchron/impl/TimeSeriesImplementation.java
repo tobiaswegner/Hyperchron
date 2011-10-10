@@ -217,6 +217,8 @@ public class TimeSeriesImplementation implements TimeSeries {
 			entityDescriptions.put(key, entityDescriptor);
 			
 			entityDB.store(entityDescriptor);
+			
+			entityDB.commit();
 		}
 
 		entityDescriptor.tree.SaveTimestamp(Timestamp);
