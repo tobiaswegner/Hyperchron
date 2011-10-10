@@ -22,7 +22,6 @@ package org.hyperchron.impl;
 import java.util.ArrayList;
 import java.util.Hashtable;
 import java.util.Random;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.hyperchron.TimeSeries;
 import org.hyperchron.blocks.BlockStore;
@@ -41,32 +40,15 @@ public class TimeSeriesImplementation implements TimeSeries {
 	
 	ArrayList<String> entities = new ArrayList<String>();
 	
-	java.util.concurrent.atomic.AtomicLong entityID = new AtomicLong();	
+	protected long entityID = 0;	
 
 	volatile boolean ShuttingDown = false;
 
-	public long[] loadNextIDFromDB() {
-		final Query query = entityDB.query();
-		query.constrain(long[].class);
-
-		ObjectSet<long[]> qresult = query.execute();
-		
-		if (qresult.size() > 0) {
-			return qresult.next();
-		}
-		
-		return null;
-	}
-	
 	public TimeSeriesImplementation(ObjectContainer entityDB, BlockStore blockStore) {
 		this.entityDB = entityDB;
 		this.blockStore = blockStore;
 	
-		long[] nextID = loadNextIDFromDB();
-		
-		if (nextID != null) {
-			entityID.set(nextID[0]);
-		}
+		entityID = blockStore.ReadFromHeader(0);
 
 		{
 			final Query query = entityDB.query();
@@ -225,16 +207,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 		EntityDescriptor entityDescriptor = entityDescriptions.get(key);
 		
 		if (entityDescriptor == null) {
-			long nextID = entityID.getAndIncrement();
-			
-			long[] nextIDObj = loadNextIDFromDB();
-			
-			if (nextIDObj == null)
-				nextIDObj = new long[1];
-			
-			nextIDObj[0] = nextID;
-			
-			entityDB.store(nextIDObj);
+			long nextID = generateNewEntityID();
 			
 			entityDescriptor = new EntityDescriptor(key, nextID);
 
@@ -260,5 +233,13 @@ public class TimeSeriesImplementation implements TimeSeries {
 		
 		if (blockStore != null)
 			blockStore.Shutdown();
+	}
+	
+	protected synchronized long generateNewEntityID() {
+		entityID++;
+		
+		blockStore.WriteToHeader(0, entityID);
+		
+		return entityID - 1;
 	}
 }

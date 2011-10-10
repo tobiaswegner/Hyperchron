@@ -83,13 +83,13 @@ public class HyperchronTool {
 					int chunkOffset = 0;
 					
 					while (true) {
-						long entityID = blockStore.ReadFromSuperblock(chunk, chunkOffset, 0);
+						long entityID = blockStore.ReadFromSuperblock(chunk, chunkOffset, HyperchronMetrics.SUPERBLOCK_ENTRY_ENTITY_ID);
 						
 						if (entityID == -1)
 							break;
 						
 						if (entityID == targetEntityID) {
-							int blockLength = ((int)blockStore.ReadFromSuperblock(chunk, chunkOffset, 2));
+							int blockLength = ((int)blockStore.ReadFromSuperblock(chunk, chunkOffset, HyperchronMetrics.SUPERBLOCK_ENTRY_LENGTH));
 
 							LongBuffer chunkBuffer = blockStore.loadChunk(chunk);
 							
