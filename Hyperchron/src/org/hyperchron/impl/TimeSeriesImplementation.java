@@ -97,9 +97,7 @@ public class TimeSeriesImplementation implements TimeSeries {
 
 	@Override
 	public void releaseIterator(long Iterator) {
-		TimeSeriesIterator timeSeriesIterator = iterators.get(new Long(Iterator));
-
-		iterators.remove(timeSeriesIterator);
+		iterators.remove(new Long(Iterator));
 	}
 
 	@Override
