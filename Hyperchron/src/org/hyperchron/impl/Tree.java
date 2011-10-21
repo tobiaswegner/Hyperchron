@@ -379,7 +379,10 @@ public class Tree {
 				
 				leaf.setLength(leaf.getLength() + 1);
 			} else {
-				System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.getLength() - index);
+//				System.arraycopy(leaf.timeStamps, index, leaf.timeStamps, index + 1, leaf.getLength() - index);
+				for (int i = leaf.getLength(); i > index; i++) {
+					leaf.timeStamps.put(leaf.getOffsetInBuffer() + i, leaf.timeStamps.get(leaf.getOffsetInBuffer() + i - 1));
+				}
 				
 				leaf.timeStamps.put(leaf.getOffsetInBuffer() + index, timestamp);
 				
